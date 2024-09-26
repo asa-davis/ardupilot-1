@@ -6,10 +6,14 @@ bool ModeRTL::_enter()
     plane.prev_WP_loc = plane.current_loc;
     plane.do_RTL(plane.get_RTL_altitude_cm());
     plane.rtl.done_climb = false;
+#if HAL_QUADPLANE_ENABLED
     plane.vtol_approach_s.approach_stage = Plane::Landing_ApproachStage::RTL;
+#endif
 
     // do not check if we have reached the loiter target if switching from loiter this will trigger as the nav controller has not yet proceeded the new destination
+#if HAL_QUADPLANE_ENABLED
     switch_QRTL(false);
+#endif
 
     return true;
 }
@@ -50,6 +54,7 @@ void ModeRTL::update()
 
 void ModeRTL::navigate()
 {
+#if HAL_QUADPLANE_ENABLED
     if (plane.control_mode->mode_number() != QRTL) {
         // QRTL shares this navigate function with RTL
 
@@ -68,8 +73,9 @@ void ModeRTL::navigate()
             return;
         }
     }
+#endif
 
-    if (plane.g.rtl_autoland == 1 &&
+    if (plane.g.rtl_autoland == RtlAutoland::RTL_THEN_DO_LAND_START &&
         !plane.auto_state.checked_for_autoland &&
         plane.reached_loiter_target() && 
         labs(plane.altitude_error_cm) < 1000) {
@@ -84,7 +90,7 @@ void ModeRTL::navigate()
         // on every loop
         plane.auto_state.checked_for_autoland = true;
     }
-    else if (plane.g.rtl_autoland == 2 &&
+    else if (plane.g.rtl_autoland == RtlAutoland::RTL_IMMEDIATE_DO_LAND_START &&
         !plane.auto_state.checked_for_autoland) {
         // Go directly to the landing sequence
         if (plane.mission.jump_to_landing_sequence()) {
@@ -105,10 +111,10 @@ void ModeRTL::navigate()
     plane.update_loiter(radius);
 }
 
-
+#if HAL_QUADPLANE_ENABLED
 // Switch to QRTL if enabled and within radius
 bool ModeRTL::switch_QRTL(bool check_loiter_target)
-{ 
+{
     if (!plane.quadplane.available() || ((plane.quadplane.rtl_mode != QuadPlane::RTL_MODE::SWITCH_QRTL) && (plane.quadplane.rtl_mode != QuadPlane::RTL_MODE::QRTL_ALWAYS))) {  
         return false;
     }
@@ -138,3 +144,5 @@ bool ModeRTL::switch_QRTL(bool check_loiter_target)
 
     return false;
 }
+
+#endif  // HAL_QUADPLANE_ENABLED

@@ -1,5 +1,6 @@
 #include <AP_HAL/AP_HAL.h>
 #include "AC_Loiter.h"
+#include <AP_Vehicle/AP_Vehicle_Type.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -131,14 +132,7 @@ void AC_Loiter::init_target()
 /// reduce response for landing
 void AC_Loiter::soften_for_landing()
 {
-    const Vector3f& curr_pos = _inav.get_position();
-
-    // set target position to current position
-    _pos_control.set_pos_target_xy_cm(curr_pos.x, curr_pos.y);
-
-    // also prevent I term build up in xy velocity controller. Note
-    // that this flag is reset on each loop, in update_xy_controller()
-    _pos_control.set_externally_limited_xy();
+    _pos_control.soften_for_landing_xy();
 }
 
 /// set pilot desired acceleration in centi-degrees
@@ -185,8 +179,8 @@ void AC_Loiter::get_stopping_point_xy(Vector2f& stopping_point) const
 /// get maximum lean angle when using loiter
 float AC_Loiter::get_angle_max_cd() const
 {
-    if (is_zero(_angle_max)) {
-        return MIN(_attitude_control.lean_angle_max(), _pos_control.get_lean_angle_max_cd()) * (2.0f/3.0f);
+    if (!is_positive(_angle_max)) {
+        return MIN(_attitude_control.lean_angle_max_cd(), _pos_control.get_lean_angle_max_cd()) * (2.0f/3.0f);
     }
     return MIN(_angle_max*100.0f, _pos_control.get_lean_angle_max_cd());
 }
@@ -202,7 +196,7 @@ void AC_Loiter::update(bool avoidance_on)
 void AC_Loiter::sanity_check_params()
 {
     _speed_cms = MAX(_speed_cms, LOITER_SPEED_MIN);
-    _accel_cmss = MIN(_accel_cmss, GRAVITY_MSS * 100.0f * tanf(ToRad(_attitude_control.lean_angle_max() * 0.01f)));
+    _accel_cmss = MIN(_accel_cmss, GRAVITY_MSS * 100.0f * tanf(ToRad(_attitude_control.lean_angle_max_cd() * 0.01f)));
 }
 
 /// calc_desired_velocity - updates desired velocity (i.e. feed forward) with pilot requested acceleration and fake wind resistance
@@ -217,7 +211,7 @@ void AC_Loiter::calc_desired_velocity(float nav_dt, bool avoidance_on)
     float gnd_speed_limit_cms = MIN(_speed_cms, ekfGndSpdLimit*100.0f);
     gnd_speed_limit_cms = MAX(gnd_speed_limit_cms, LOITER_SPEED_MIN);
 
-    float pilot_acceleration_max = GRAVITY_MSS*100.0f * tanf(radians(get_angle_max_cd()*0.01f));
+    float pilot_acceleration_max = angle_to_accel(get_angle_max_cd()*0.01) * 100;
 
     // range check nav_dt
     if (nav_dt < 0) {
@@ -274,6 +268,7 @@ void AC_Loiter::calc_desired_velocity(float nav_dt, bool avoidance_on)
         desired_vel.y = desired_vel.y * gnd_speed_limit_cms / horizSpdDem;
     }
 
+#if !APM_BUILD_TYPE(APM_BUILD_ArduPlane)
     if (avoidance_on) {
         // Limit the velocity to prevent fence violations
         // TODO: We need to also limit the _desired_accel
@@ -284,6 +279,7 @@ void AC_Loiter::calc_desired_velocity(float nav_dt, bool avoidance_on)
             desired_vel = Vector2f{avoidance_vel_3d.x, avoidance_vel_3d.y};
         }
     }
+#endif // !APM_BUILD_ArduPlane
 
     // get loiters desired velocity from the position controller where it is being stored.
     Vector2p target_pos = _pos_control.get_pos_target_cm().xy();

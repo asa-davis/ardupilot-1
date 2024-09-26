@@ -21,13 +21,15 @@
 #include <AP_Logger/AP_Logger.h>
 #include <stdio.h>
 
+#if !APM_BUILD_TYPE(APM_BUILD_ArduPlane)
+
 #if APM_BUILD_TYPE(APM_BUILD_Rover)
  # define AP_AVOID_BEHAVE_DEFAULT AC_Avoid::BehaviourType::BEHAVIOR_STOP
 #else
  # define AP_AVOID_BEHAVE_DEFAULT AC_Avoid::BehaviourType::BEHAVIOR_SLIDE
 #endif
 
-#if APM_BUILD_TYPE(APM_BUILD_ArduCopter)
+#if APM_BUILD_COPTER_OR_HELI
     # define AP_AVOID_ENABLE_Z          1
 #endif
 
@@ -65,12 +67,12 @@ const AP_Param::GroupInfo AC_Avoid::var_info[] = {
     // @User: Standard
     AP_GROUPINFO("MARGIN", 4, AC_Avoid, _margin, 2.0f),
 
-    // @Param{Copter}: BEHAVE
+    // @Param{Copter, Rover}: BEHAVE
     // @DisplayName: Avoidance behaviour
     // @Description: Avoidance behaviour (slide or stop)
     // @Values: 0:Slide,1:Stop
     // @User: Standard
-    AP_GROUPINFO_FRAME("BEHAVE", 5, AC_Avoid, _behavior, AP_AVOID_BEHAVE_DEFAULT, AP_PARAM_FRAME_COPTER | AP_PARAM_FRAME_HELI | AP_PARAM_FRAME_TRICOPTER),
+    AP_GROUPINFO_FRAME("BEHAVE", 5, AC_Avoid, _behavior, AP_AVOID_BEHAVE_DEFAULT, AP_PARAM_FRAME_COPTER | AP_PARAM_FRAME_HELI | AP_PARAM_FRAME_TRICOPTER | AP_PARAM_FRAME_ROVER),
 
     // @Param: BACKUP_SPD
     // @DisplayName: Avoidance maximum backup speed
@@ -1174,7 +1176,7 @@ void AC_Avoid::adjust_velocity_proximity(float kP, float accel_cmss, Vector3f &d
             if (breach_dist > deadzone) {
                 // this vector will help us decide how much we have to back away horizontally and vertically
                 const Vector3f margin_vector = vector_to_obstacle.normalized() * breach_dist;
-                const float xy_back_dist = norm(margin_vector.x, margin_vector.y);
+                const float xy_back_dist = margin_vector.xy().length();
                 const float z_back_dist = margin_vector.z;
                 calc_backup_velocity_3D(kP, accel_cmss, quad_1_back_vel, quad_2_back_vel, quad_3_back_vel, quad_4_back_vel, xy_back_dist, vector_to_obstacle, kP_z, accel_cmss_z, z_back_dist, min_back_vel_z, max_back_vel_z, dt);
             }
@@ -1466,3 +1468,5 @@ AC_Avoid *ac_avoid()
 }
 
 }
+
+#endif // !APM_BUILD_Arduplane
